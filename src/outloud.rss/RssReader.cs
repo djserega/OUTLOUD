@@ -75,15 +75,17 @@ namespace Outloud.Rss
 
             uint downloadNews = 0;
 
-            try
+            ISyndicationItem item;
+
+            while (await feedReader.Read())
             {
-                while (await feedReader.Read())
+                try
                 {
                     switch (feedReader.ElementType)
                     {
                         case SyndicationElementType.Item:
 
-                            ISyndicationItem item = await feedReader.ReadItem();
+                            item = await feedReader.ReadItem();
 
                             if (item.Published < dateFrom)
                                 return downloadedNews;
@@ -109,10 +111,14 @@ namespace Outloud.Rss
                             break;
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex.ToString());
+                catch (FormatException ex)
+                {
+                    _logger?.LogWarning(ex.ToString());
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex.ToString());
+                }
             }
 
             return downloadedNews;

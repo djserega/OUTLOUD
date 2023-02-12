@@ -45,6 +45,7 @@ namespace Outloud.Rss
 
             if (_logger != default)
                 RssReader.SetLogger(_logger);
+
             await RssReader.SetTitle(newRss);
 
             Add(newRss);

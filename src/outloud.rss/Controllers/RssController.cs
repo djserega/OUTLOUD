@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Linq.Expressions;
 using System.ComponentModel.DataAnnotations;
-using Quartz;
+using System.Linq.Expressions;
 
 namespace Outloud.Rss.Controllers
 {
@@ -33,7 +32,7 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpPost("AddRSSFeed")]
-        public async Task<string> AddRSSFeed([Required] string feedUrl = "https://www.pravda.com.ua/rss/")
+        public async Task<string> AddRSSFeed([Required] string feedUrl)
         {
             try
             {
@@ -142,7 +141,7 @@ namespace Outloud.Rss.Controllers
                 await InitAutodownloadNew();
 
                 Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
-                if (feedUrl == default)
+                if (string.IsNullOrWhiteSpace(feedUrl))
                     expressionFindFeed = el => el.IsActive;
                 else
                 {
@@ -199,7 +198,6 @@ namespace Outloud.Rss.Controllers
             }
         }
 
-
         private static void CheckToCorrectUrl(string? feedUrl,
                                               out Uri? uri)
         {
@@ -219,9 +217,11 @@ namespace Outloud.Rss.Controllers
                 
                 await _timerRSSFeedReader.SetAction(new Action(async () => 
                 {
-                    await DownloadingNewFromActiveRss(_logger, numberOfNewsToDownloadPerUrl: 50); 
+                    await DownloadingNewFromActiveRss(_logger, numberOfNewsToDownloadPerUrl: 1); 
                 }));
-                
+
+                Thread.Sleep(1000);
+
                 _logger.LogInformation("Autoreader news initialized");
             }
         }

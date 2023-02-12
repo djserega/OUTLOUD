@@ -1,7 +1,6 @@
 ﻿using Outloud.Rss.Controllers;
 using Quartz;
 using Quartz.Impl;
-using System.ComponentModel.DataAnnotations;
 
 namespace Outloud.Rss.TimerReader
 {
@@ -19,6 +18,7 @@ namespace Outloud.Rss.TimerReader
             if (_logger == default)
                 _logger = logger;
         }
+     
         internal async Task SetAction(Action actionReader)
         {
             if (_actionReader == default)
@@ -29,7 +29,7 @@ namespace Outloud.Rss.TimerReader
 
                 try
                 {
-                    await StartReaderAsync(0, 0, 15);
+                    await StartReaderAsync(0, 0, 5);
                 }
                 catch (Exception ex)
                 {
