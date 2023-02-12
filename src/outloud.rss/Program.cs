@@ -6,6 +6,9 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddDbContext<Outloud.Rss.DatabaseConnector>(ServiceLifetime.Singleton, ServiceLifetime.Transient);
+
+builder.Services.AddSingleton<Outloud.Rss.TimerReader.TimerRSSFeed>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

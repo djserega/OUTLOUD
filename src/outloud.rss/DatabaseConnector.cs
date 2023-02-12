@@ -4,17 +4,14 @@ using Outloud.Rss.Controllers;
 
 namespace Outloud.Rss
 {
-    internal class DatabaseConnector : DbContext
+    internal class DatabaseConnector : DbContext, IDatabaseConnector
     {
         private ILogger<RssController>? _logger;
 
-        internal DatabaseConnector()
+        public DatabaseConnector()
         {
             SQLitePCL.Batteries.Init();
-        }
 
-        internal void Init()
-        {
             Database.OpenConnection();
             Database.EnsureCreated();
         }
@@ -22,13 +19,12 @@ namespace Outloud.Rss
         protected override void OnConfiguring(DbContextOptionsBuilder options)
             => options.UseSqlite("Data Source=:memory:");
 
-        internal void SetLogger(ILogger<RssController> logger)
+        public void SetLogger(ILogger<RssController> logger)
         {
             _logger = logger;
         }
 
-
-        internal async Task AddUrl(Uri uri)
+        public async Task AddUrl(Uri uri)
         {
             IEnumerable<Models.RssFeed> rssFeeds = await GetAllRssFeed(el => el.Uri == uri);
             if (rssFeeds.Any())
@@ -43,17 +39,15 @@ namespace Outloud.Rss
                 IsActive = true
             };
 
-            if (_logger != default)
-                RssReader.SetLogger(_logger);
-
-            await RssReader.SetTitle(newRss);
+            RssReader rssReader = new(_logger, newRss);
+            await rssReader.SetTitle();
 
             Add(newRss);
 
             SaveChanges();
         }
 
-        internal async Task<IEnumerable<Models.RssFeed>> GetAllRssFeed(Expression<Func<Models.RssFeed, bool>>? expression = default)
+        public async Task<IEnumerable<Models.RssFeed>> GetAllRssFeed(Expression<Func<Models.RssFeed, bool>>? expression = default)
         {
             if (expression == default)
                 return await RssFeeds.ToListAsync();
