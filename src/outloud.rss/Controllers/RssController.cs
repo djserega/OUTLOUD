@@ -29,9 +29,7 @@ namespace Outloud.Rss.Controllers
             _logger = logger;
 
             _databaseConnector.SetLogger(_logger);
-
             _timerRSSFeedReader.SetLogger(_logger);
-            _timerRSSFeedReader.SetAction(new Action(async () => { await DownloadingNewFromActiveRss(_logger, numberOfNewsToDownloadPerUrl: 50); }));
         }
 
         [HttpPost("AddRSSFeed")]
@@ -40,6 +38,8 @@ namespace Outloud.Rss.Controllers
             try
             {
                 _logger.LogInformation($"Adding feed: {feedUrl}");
+
+                await InitAutodownloadNew();
 
                 CheckToCorrectUrl(feedUrl, out Uri? uri);
 
@@ -63,6 +63,8 @@ namespace Outloud.Rss.Controllers
             {
                 _logger.LogInformation("Received request active rss");
 
+                await InitAutodownloadNew();
+
                 List<Models.ResultItems.RssFeedResult> resultsData = new();
 
                 IEnumerable<Models.RssFeed> activeRssFeed = await _databaseConnector.GetAllRssFeed(el => el.IsActive);
@@ -82,10 +84,9 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpGet("GetUnreadNews")]
-        public async Task<IEnumerable<Models.ResultItems.RssFeedResultWithData>> GetUnreadNews(
-            [Required] DateTimeOffset dateFrom,
-            string? feedUrl = default,
-            bool markedIsRead = false)
+        public async Task<IEnumerable<Models.ResultItems.RssFeedResultWithData>> GetUnreadNews([Required] DateTimeOffset dateFrom,
+                                                                                                string? feedUrl = default,
+                                                                                                bool markedIsRead = false)
         {
             try
             {
@@ -94,6 +95,8 @@ namespace Outloud.Rss.Controllers
                     $" - feedUrl: {feedUrl}\n" +
                     $" - markedIsRead: {markedIsRead}";
                 _logger.LogInformation(logMessage);
+
+                await InitAutodownloadNew();
 
                 IEnumerable<Models.RssFeed> feeds = await DownloadingNewFromActiveRss(_logger, dateFrom, feedUrl, 0);
 
@@ -135,6 +138,8 @@ namespace Outloud.Rss.Controllers
             try
             {
                 _logger.LogInformation("Received request marked news as read");
+
+                await InitAutodownloadNew();
 
                 Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
                 if (feedUrl == default)
@@ -179,6 +184,8 @@ namespace Outloud.Rss.Controllers
         {
             _logger.LogInformation("Trying to change for news download times");
 
+            await InitAutodownloadNew();
+
             DateTimeOffset? nextStartJob = await _timerRSSFeedReader.StartReaderAsync(hours, minutes, seconds);
 
             if (nextStartJob == default)
@@ -188,7 +195,7 @@ namespace Outloud.Rss.Controllers
             }
             else
             {
-                return new(0, 0, 10);
+                return new(hours, minutes, seconds);
             }
         }
 
@@ -202,6 +209,21 @@ namespace Outloud.Rss.Controllers
                 uri = checkUri;
             else
                 throw new InvalidOperationException("Url is not valid");
+        }
+
+        private async Task InitAutodownloadNew()
+        {
+            if (!_timerRSSFeedReader.Initialized)
+            {
+                _logger.LogInformation("Initializing autoreader news");
+                
+                await _timerRSSFeedReader.SetAction(new Action(async () => 
+                {
+                    await DownloadingNewFromActiveRss(_logger, numberOfNewsToDownloadPerUrl: 50); 
+                }));
+                
+                _logger.LogInformation("Autoreader news initialized");
+            }
         }
 
         private static async Task<IEnumerable<Models.RssFeed>> DownloadingNewFromActiveRss(ILogger<RssController> logger,

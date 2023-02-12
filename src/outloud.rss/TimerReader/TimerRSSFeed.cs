@@ -12,35 +12,31 @@ namespace Outloud.Rss.TimerReader
 
         private IScheduler? _schedulerReaderRss;
 
-        public TimerRSSFeed()
-        {
-            Task.Run(async () =>
-            {
-                _schedulerReaderRss = await new StdSchedulerFactory().GetScheduler();
-
-                await _schedulerReaderRss.Start();
-            });
-        }
+        internal bool Initialized { get => _schedulerReaderRss != default; }
 
         internal void SetLogger(ILogger<RssController> logger)
         {
-            if (logger == default)
+            if (_logger == default)
                 _logger = logger;
         }
-        internal async void SetAction(Action actionReader)
+        internal async Task SetAction(Action actionReader)
         {
             if (_actionReader == default)
             {
+                _schedulerReaderRss = await new StdSchedulerFactory().GetScheduler();
+
                 _actionReader = actionReader;
 
-                //try
-                //{
-                //    await StartReaderAsync(0, 0, 10);
-                //}
-                //catch (Exception ex)
-                //{
-                //    _logger?.LogError(ex.Message);
-                //}
+                try
+                {
+                    await StartReaderAsync(0, 0, 15);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex.Message);
+                }
+
+                await _schedulerReaderRss.Start();
             }
         }
 
