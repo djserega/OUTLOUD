@@ -11,7 +11,10 @@ namespace Outloud.Rss
         internal DatabaseConnector()
         {
             SQLitePCL.Batteries.Init();
+        }
 
+        internal void Init()
+        {
             Database.OpenConnection();
             Database.EnsureCreated();
         }
@@ -27,7 +30,8 @@ namespace Outloud.Rss
 
         internal async Task AddUrl(Uri uri)
         {
-            if (GetAllRssFeed(el => el.Uri == uri).Any())
+            IEnumerable<Models.RssFeed> rssFeeds = await GetAllRssFeed(el => el.Uri == uri);
+            if (rssFeeds.Any())
             {
                 _logger?.LogWarning($"Uri already added: {uri}");
                 return;
@@ -39,6 +43,8 @@ namespace Outloud.Rss
                 IsActive = true
             };
 
+            if (_logger != default)
+                RssReader.SetLogger(_logger);
             await RssReader.SetTitle(newRss);
 
             Add(newRss);
@@ -46,12 +52,12 @@ namespace Outloud.Rss
             SaveChanges();
         }
 
-        internal IEnumerable<Models.RssFeed> GetAllRssFeed(Expression<Func<Models.RssFeed, bool>>? expression = default)
+        internal async Task<IEnumerable<Models.RssFeed>> GetAllRssFeed(Expression<Func<Models.RssFeed, bool>>? expression = default)
         {
             if (expression == default)
-                return RssFeeds.ToList();
+                return await RssFeeds.ToListAsync();
             else
-                return RssFeeds.Where(expression);
+                return await RssFeeds.Where(expression).ToListAsync();
         }
 
         DbSet<Models.RssFeed> RssFeeds { get; set; }

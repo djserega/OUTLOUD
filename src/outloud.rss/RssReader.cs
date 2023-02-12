@@ -56,8 +56,10 @@ namespace Outloud.Rss
             }
         }
 
-        internal async static void ReadItems(Models.RssFeed rssFeed, DateTimeOffset dateFrom = default, uint numberOfNewsToDownload = 10)
+        internal async static Task<int> ReadItems(Models.RssFeed rssFeed, DateTimeOffset dateFrom = default, uint numberOfNewsToDownload = 10)
         {
+            int downloadedNews = 0;
+
             if (rssFeed.Uri == default)
             {
                 _logger?.LogError($"Url is empty. Id: {rssFeed.Id}");
@@ -84,7 +86,7 @@ namespace Outloud.Rss
                             ISyndicationItem item = await feedReader.ReadItem();
 
                             if (item.Published < dateFrom)
-                                return;
+                                return downloadedNews;
 
                             Models.RssFeedItemData newItemRss = new()
                             {
@@ -97,10 +99,12 @@ namespace Outloud.Rss
                             if (rssFeed.ItemDatas.Any(el => el.Equals(newItemRss)))
                                 continue;
 
+                            downloadedNews++;
+
                             rssFeed.ItemDatas.Add(newItemRss);
 
                             if (++downloadNews >= numberOfNewsToDownload)
-                                return;
+                                return downloadedNews;
 
                             break;
                     }
@@ -110,6 +114,8 @@ namespace Outloud.Rss
             {
                 _logger?.LogError(ex.ToString());
             }
+
+            return downloadedNews;
         }
     }
 }

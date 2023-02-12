@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq.Expressions;
 using System.ComponentModel.DataAnnotations;
+using Quartz;
 
 namespace Outloud.Rss.Controllers
 {
@@ -11,28 +12,40 @@ namespace Outloud.Rss.Controllers
     public class RssController : ControllerBase
     {
         private static readonly DatabaseConnector _databaseConnector;
+        private static readonly TimerReader.TimerRSSFeed _timerRSSFeedReader;
 
         private readonly ILogger<RssController> _logger;
 
         static RssController()
         {
-            _databaseConnector = new();
+            _databaseConnector = new DatabaseConnector();
+            _databaseConnector.Init();
+
+            _timerRSSFeedReader = new();
         }
 
         public RssController(ILogger<RssController> logger)
         {
             _logger = logger;
+
             _databaseConnector.SetLogger(_logger);
+
+            _timerRSSFeedReader.SetLogger(_logger);
+            _timerRSSFeedReader.SetAction(new Action(async () => { await DownloadingNewFromActiveRss(_logger, numberOfNewsToDownloadPerUrl: 50); }));
         }
 
         [HttpPost("AddRSSFeed")]
-        public async Task<string> AddRSSFeed([Required] string feedUrl)
+        public async Task<string> AddRSSFeed([Required] string feedUrl = "https://www.pravda.com.ua/rss/")
         {
             try
             {
+                _logger.LogInformation($"Adding feed: {feedUrl}");
+
                 CheckToCorrectUrl(feedUrl, out Uri? uri);
 
                 await _databaseConnector.AddUrl(uri!);
+
+                _logger.LogInformation($"Feed added: {feedUrl}");
 
                 return $"{{\"success\": true}}";
             }
@@ -44,13 +57,20 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpGet("GetAllActiveRSSFeeds")]
-        public IEnumerable<Models.ResultItems.RssFeedResult>? GetAllActiveRSSFeeds()
+        public async Task<IEnumerable<Models.ResultItems.RssFeedResult>?> GetAllActiveRSSFeeds()
         {
             try
             {
+                _logger.LogInformation("Received request active rss");
+
                 List<Models.ResultItems.RssFeedResult> resultsData = new();
-                foreach (Models.RssFeed item in _databaseConnector.GetAllRssFeed(el => el.IsActive))
+
+                IEnumerable<Models.RssFeed> activeRssFeed = await _databaseConnector.GetAllRssFeed(el => el.IsActive);
+
+                foreach (Models.RssFeed item in activeRssFeed)
                     resultsData.Add(new Models.ResultItems.RssFeedResult(item));
+
+                _logger.LogInformation($"Number of active rss {resultsData.Count}");
 
                 return resultsData;
             }
@@ -62,31 +82,20 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpGet("GetUnreadNews")]
-        public IEnumerable<Models.ResultItems.RssFeedResultWithData>? GetUnreadNews(
+        public async Task<IEnumerable<Models.ResultItems.RssFeedResultWithData>> GetUnreadNews(
             [Required] DateTimeOffset dateFrom,
             string? feedUrl = default,
-            uint numberOfNewsToDownloadPerUrl = 10,
             bool markedIsRead = false)
         {
             try
             {
-                Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
-                if (feedUrl == default)
-                    expressionFindFeed = el => el.IsActive;
-                else
-                {
-                    CheckToCorrectUrl(feedUrl, out Uri? uri);
+                string logMessage = $"Received request unread news:\n" +
+                    $" - dateFrom: {dateFrom}\n" +
+                    $" - feedUrl: {feedUrl}\n" +
+                    $" - markedIsRead: {markedIsRead}";
+                _logger.LogInformation(logMessage);
 
-                    expressionFindFeed = el => el.IsActive && el.Uri == uri;
-                }
-
-                IEnumerable<Models.RssFeed> feeds = _databaseConnector.GetAllRssFeed(expressionFindFeed);
-
-                for (int i = 0; i < feeds.Count(); i++)
-                {
-                    // fill the rss item with news 
-                    RssReader.ReadItems(feeds.ElementAt(i), dateFrom, numberOfNewsToDownloadPerUrl);
-                }
+                IEnumerable<Models.RssFeed> feeds = await DownloadingNewFromActiveRss(_logger, dateFrom, feedUrl, 0);
 
                 // get unread news, and mark them as IsRead
                 List<Models.ResultItems.RssFeedResultWithData> feedsNoRead = new();
@@ -109,7 +118,7 @@ namespace Outloud.Rss.Controllers
                     feedsNoRead.Add(unreadRssItem);
                 }
 
-                _databaseConnector.SaveChanges();
+                _logger.LogInformation("Response has been generated");
 
                 return feedsNoRead;
             }
@@ -121,10 +130,12 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpPost("SetNewAsRead")]
-        public string? SetNewAsRead(string feedUrl = "")
+        public async Task<string?> SetNewAsRead(string feedUrl = "")
         {
             try
             {
+                _logger.LogInformation("Received request marked news as read");
+
                 Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
                 if (feedUrl == default)
                     expressionFindFeed = el => el.IsActive;
@@ -137,7 +148,7 @@ namespace Outloud.Rss.Controllers
 
                 int numNewsMarked = 0;
 
-                IEnumerable<Models.RssFeed> feeds = _databaseConnector.GetAllRssFeed(expressionFindFeed);
+                IEnumerable<Models.RssFeed> feeds = await _databaseConnector.GetAllRssFeed(expressionFindFeed);
                 foreach (Models.RssFeed item in feeds.Where(el => el.ItemDatas.Any(el => !el.IsRead)))
                 {
                     foreach (Models.RssFeedItemData itemData in item.ItemDatas)
@@ -161,8 +172,29 @@ namespace Outloud.Rss.Controllers
             }
         }
 
+        [HttpPost("ChangeTimeLoadingNews")]
+        public async Task<Models.ResultItems.TimePeriodDownloadingNews?> ChangeTimeLoadingNews([Required] int hours,
+                                                                                               [Required] int minutes,
+                                                                                               [Required] int seconds)
+        {
+            _logger.LogInformation("Trying to change for news download times");
 
-        private static void CheckToCorrectUrl(string? feedUrl, out Uri? uri)
+            DateTimeOffset? nextStartJob = await _timerRSSFeedReader.StartReaderAsync(hours, minutes, seconds);
+
+            if (nextStartJob == default)
+            {
+                _logger.LogError("Download task time not set");
+                return default;
+            }
+            else
+            {
+                return new(0, 0, 10);
+            }
+        }
+
+
+        private static void CheckToCorrectUrl(string? feedUrl,
+                                              out Uri? uri)
         {
             uri = default;
 
@@ -170,6 +202,48 @@ namespace Outloud.Rss.Controllers
                 uri = checkUri;
             else
                 throw new InvalidOperationException("Url is not valid");
+        }
+
+        private static async Task<IEnumerable<Models.RssFeed>> DownloadingNewFromActiveRss(ILogger<RssController> logger,
+                                                                                           DateTimeOffset dateFrom = default,
+                                                                                           string? feedUrl = default,
+                                                                                           uint numberOfNewsToDownloadPerUrl = 10)
+        {
+            logger.LogInformation("News loading has started");
+
+            Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
+            if (feedUrl == default)
+                expressionFindFeed = el => el.IsActive;
+            else
+            {
+                CheckToCorrectUrl(feedUrl, out Uri? uri);
+
+                expressionFindFeed = el => el.IsActive && el.Uri == uri;
+            }
+
+            IEnumerable<Models.RssFeed>? feeds = await _databaseConnector.GetAllRssFeed(expressionFindFeed);
+
+            logger.LogInformation($"Number of active rss: {feeds.Count()}");
+
+            int downloadedNews = 0;
+            for (int i = 0; i < feeds.Count(); i++)
+            {
+                // fill the rss item with news 
+                downloadedNews += await RssReader.ReadItems(feeds.ElementAt(i), dateFrom, numberOfNewsToDownloadPerUrl);
+            }
+
+            logger.LogInformation($"The news has been downloaded: {downloadedNews}");
+
+            if (downloadedNews > 0)
+            {
+                logger.LogInformation("Saving data");
+
+                _databaseConnector.SaveChanges();
+
+                logger.LogInformation("Data saved");
+            }
+
+            return feeds;
         }
 
     }
