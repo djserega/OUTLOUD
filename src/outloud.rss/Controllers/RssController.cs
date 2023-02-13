@@ -15,7 +15,8 @@ namespace Outloud.Rss.Controllers
         private readonly IDatabaseConnector _databaseConnector;
         private readonly TimerReader.TimerRSSFeed _timerRSSFeedReader;
 
-        public RssController(ILogger<RssController> logger, IServiceProvider serviceProvider)
+        public RssController(ILogger<RssController> logger,
+                             IServiceProvider serviceProvider)
         {
             _logger = logger;
            
@@ -24,7 +25,7 @@ namespace Outloud.Rss.Controllers
         }
 
         [HttpPost("AddRSSFeed")]
-        public async Task<string> AddRSSFeed([Required] string feedUrl = "https://inform-ua.info/feed/rss/v1")
+        public async Task<string> AddRSSFeed([Required] string feedUrl)
         {
             try
             {

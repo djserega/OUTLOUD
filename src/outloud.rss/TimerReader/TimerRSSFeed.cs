@@ -13,15 +13,14 @@ namespace Outloud.Rss.TimerReader
 
         private IScheduler? _schedulerReaderRss;
 
-        public TimerRSSFeed(ILogger<RssController> logger, IServiceProvider serviceProvider)
+        public TimerRSSFeed(ILogger<RssController> logger,
+                            IServiceProvider serviceProvider)
         {
             _logger = logger;
             _databaseConnector = serviceProvider.GetRequiredService<DatabaseConnector>();
 
             Task.Run(InitAutodownloadNews);
         }
-
-        internal bool Initialized { get => _schedulerReaderRss != default; }
 
         private async Task InitAutodownloadNews()
         {
@@ -57,7 +56,9 @@ namespace Outloud.Rss.TimerReader
             }
         }
 
-        internal async Task<DateTimeOffset?> StartReaderAsync(int hours, int minutes, int seconds)
+        internal async Task<DateTimeOffset?> StartReaderAsync(int hours,
+                                                              int minutes,
+                                                              int seconds)
         {
             if (_schedulerReaderRss == default)
             {
