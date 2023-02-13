@@ -6,10 +6,12 @@ namespace Outloud.Rss
 {
     internal class DatabaseConnector : DbContext, IDatabaseConnector
     {
-        private ILogger<RssController>? _logger;
+        private readonly ILogger<RssController>? _logger;
 
-        public DatabaseConnector()
+        public DatabaseConnector(ILogger<RssController> logger)
         {
+            _logger = logger;
+
             SQLitePCL.Batteries.Init();
 
             Database.OpenConnection();
@@ -18,11 +20,6 @@ namespace Outloud.Rss
 
         protected override void OnConfiguring(DbContextOptionsBuilder options)
             => options.UseSqlite("Data Source=:memory:");
-
-        public void SetLogger(ILogger<RssController> logger)
-        {
-            _logger = logger;
-        }
 
         public async Task AddUrl(Uri uri)
         {

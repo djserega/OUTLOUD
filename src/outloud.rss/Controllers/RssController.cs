@@ -20,20 +20,15 @@ namespace Outloud.Rss.Controllers
             _logger = logger;
            
             _databaseConnector = serviceProvider.GetRequiredService<DatabaseConnector>();
-            _databaseConnector.SetLogger(_logger);
-
             _timerRSSFeedReader = serviceProvider.GetRequiredService<TimerReader.TimerRSSFeed>();
-            _timerRSSFeedReader.SetLogger(_logger);
         }
 
         [HttpPost("AddRSSFeed")]
-        public async Task<string> AddRSSFeed([Required] string feedUrl)
+        public async Task<string> AddRSSFeed([Required] string feedUrl = "https://inform-ua.info/feed/rss/v1")
         {
             try
             {
                 _logger.LogInformation($"Adding feed: {feedUrl}");
-
-                await InitAutodownloadNews();
 
                 RssReader.CheckToCorrectUrl(feedUrl, out Uri? uri);
 
@@ -56,8 +51,6 @@ namespace Outloud.Rss.Controllers
             try
             {
                 _logger.LogInformation("Received request active rss");
-
-                await InitAutodownloadNews();
 
                 List<Models.ResultItems.RssFeedResult> resultsData = new();
 
@@ -89,8 +82,6 @@ namespace Outloud.Rss.Controllers
                     $" - feedUrl: {feedUrl}\n" +
                     $" - markedIsRead: {markedIsRead}";
                 _logger.LogInformation(logMessage);
-
-                await InitAutodownloadNews();
 
                 RssReader rssReader = new(_logger, _databaseConnector);
 
@@ -135,8 +126,6 @@ namespace Outloud.Rss.Controllers
             {
                 _logger.LogInformation("Received request marked news as read");
 
-                await InitAutodownloadNews();
-
                 Expression<Func<Models.RssFeed, bool>> expressionFindFeed;
                 if (string.IsNullOrWhiteSpace(feedUrl))
                     expressionFindFeed = el => el.IsActive;
@@ -180,8 +169,6 @@ namespace Outloud.Rss.Controllers
         {
             _logger.LogInformation("Trying to change for news download times");
 
-            await InitAutodownloadNews();
-
             DateTimeOffset? nextStartJob = await _timerRSSFeedReader.StartReaderAsync(hours, minutes, seconds);
 
             if (nextStartJob == default)
@@ -192,24 +179,6 @@ namespace Outloud.Rss.Controllers
             else
             {
                 return new(hours, minutes, seconds);
-            }
-        }
-
-        private async Task InitAutodownloadNews()
-        {
-            if (!_timerRSSFeedReader.Initialized)
-            {
-                _logger.LogInformation("Initializing autoreader news");
-                
-                await _timerRSSFeedReader.SetAction(new Action(async () => 
-                {
-                    RssReader rssReader = new(_logger, _databaseConnector);
-                    await rssReader.DownloadingNewFromActiveRss(numberOfNewsToDownloadPerUrl: 50); 
-                }));
-
-                Thread.Sleep(1000);
-
-                _logger.LogInformation("Autoreader news initialized");
             }
         }
 

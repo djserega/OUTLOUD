@@ -6,19 +6,36 @@ namespace Outloud.Rss.TimerReader
 {
     internal class TimerRSSFeed
     {
-        private ILogger<RssController>? _logger;
+        private readonly ILogger<RssController> _logger;
+        private readonly IDatabaseConnector _databaseConnector;
+
         private Action? _actionReader;
 
         private IScheduler? _schedulerReaderRss;
 
+        public TimerRSSFeed(ILogger<RssController> logger, IServiceProvider serviceProvider)
+        {
+            _logger = logger;
+            _databaseConnector = serviceProvider.GetRequiredService<DatabaseConnector>();
+
+            Task.Run(InitAutodownloadNews);
+        }
+
         internal bool Initialized { get => _schedulerReaderRss != default; }
 
-        internal void SetLogger(ILogger<RssController> logger)
+        private async Task InitAutodownloadNews()
         {
-            if (_logger == default)
-                _logger = logger;
+            _logger.LogInformation("Initializing autoreader news");
+
+            await SetAction(new Action(async () =>
+            {
+                RssReader rssReader = new(_logger, _databaseConnector);
+                await rssReader.DownloadingNewFromActiveRss(numberOfNewsToDownloadPerUrl: 50);
+            }));
+
+            _logger.LogInformation("Autoreader news initialized");
         }
-     
+
         internal async Task SetAction(Action actionReader)
         {
             if (_actionReader == default)

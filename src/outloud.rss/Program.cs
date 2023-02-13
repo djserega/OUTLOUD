@@ -6,7 +6,7 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddDbContext<Outloud.Rss.DatabaseConnector>(ServiceLifetime.Singleton, ServiceLifetime.Transient);
+builder.Services.AddDbContext<Outloud.Rss.DatabaseConnector>(ServiceLifetime.Singleton);
 
 builder.Services.AddSingleton<Outloud.Rss.TimerReader.TimerRSSFeed>();
 
@@ -73,5 +73,7 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.Services.GetRequiredService<Outloud.Rss.TimerReader.TimerRSSFeed>();
 
 app.Run();
