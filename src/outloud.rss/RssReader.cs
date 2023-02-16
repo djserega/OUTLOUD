@@ -11,23 +11,21 @@ namespace Outloud.Rss
     {
         private readonly ILogger<RssController> _logger;
         private readonly IDatabaseConnector? _dbConnector;
-        private readonly Models.RssFeed? _rssFeed;
+
+        private Models.RssFeed? _rssFeed;
 
         internal RssReader(ILogger<RssController> logger)
         {
             _logger = logger;
         }
-        internal RssReader(ILogger<RssController> logger, IDatabaseConnector dbConnector) : this(logger)
+        internal RssReader(ILogger<RssController> logger, IDatabaseConnector? dbConnector) : this(logger)
         {
             _dbConnector = dbConnector;
         }
-        internal RssReader(ILogger<RssController> logger, Models.RssFeed rssFeed) : this(logger)
+
+        internal void SetRssFeed(Models.RssFeed? rssFeed)
         {
             _rssFeed = rssFeed;
-        }
-        internal RssReader(ILogger<RssController> logger, IDatabaseConnector dbConnector, Models.RssFeed rssFeed) : this(logger, rssFeed)
-        {
-            _dbConnector = dbConnector;
         }
 
         internal async Task SetTitle()
@@ -93,9 +91,9 @@ namespace Outloud.Rss
 
             ISyndicationItem item;
 
-            while (await feedReader.Read())
+            try
             {
-                try
+                while (await feedReader.Read())
                 {
                     switch (feedReader.ElementType)
                     {
@@ -127,14 +125,14 @@ namespace Outloud.Rss
                             break;
                     }
                 }
-                catch (FormatException ex)
-                {
-                    _logger?.LogWarning(ex.ToString());
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex.ToString());
-                }
+            }
+            catch (FormatException ex)
+            {
+                _logger?.LogWarning(ex.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex.ToString());
             }
 
             return downloadedNews;
@@ -166,10 +164,12 @@ namespace Outloud.Rss
 
             _logger.LogInformation($"Number of active rss: {feeds.Count()}");
 
+            RssReader rssReader = new(_logger, _dbConnector);
+
             int downloadedNews = 0;
             for (int i = 0; i < feeds.Count(); i++)
             {
-                RssReader rssReader = new(_logger, _dbConnector, feeds.ElementAt(i));
+                rssReader.SetRssFeed(feeds.ElementAt(i));
                 downloadedNews += await rssReader.ReadItems(dateFrom, numberOfNewsToDownloadPerUrl);
             }
 

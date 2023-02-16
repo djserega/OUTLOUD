@@ -6,7 +6,7 @@ namespace Outloud.Rss
 {
     internal class DatabaseConnector : DbContext, IDatabaseConnector
     {
-        private readonly ILogger<RssController>? _logger;
+        private readonly ILogger<RssController> _logger;
 
         public DatabaseConnector(ILogger<RssController> logger)
         {
@@ -26,7 +26,7 @@ namespace Outloud.Rss
             IEnumerable<Models.RssFeed> rssFeeds = await GetAllRssFeed(el => el.Uri == uri);
             if (rssFeeds.Any())
             {
-                _logger?.LogWarning($"Uri already added: {uri}");
+                _logger.LogWarning($"Uri already added: {uri}");
                 return;
             }
 
@@ -36,7 +36,8 @@ namespace Outloud.Rss
                 IsActive = true
             };
 
-            RssReader rssReader = new(_logger, newRss);
+            RssReader rssReader = new(_logger);
+            rssReader.SetRssFeed(newRss);
             await rssReader.SetTitle();
 
             Add(newRss);
