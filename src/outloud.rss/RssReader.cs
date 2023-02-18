@@ -30,7 +30,12 @@ namespace Outloud.Rss
 
         internal async Task SetTitle()
         {
-            if (_rssFeed.Uri == default)
+            if (_rssFeed == default)
+            {
+                _logger?.LogError($"Rss feed is empty");
+                throw new ArgumentException($"Rss feed is empty");
+            }
+            else if (_rssFeed.Uri == default)
             {
                 _logger?.LogError($"Url is empty. Id: {_rssFeed.Id}");
                 throw new ArgumentException($"Url is empty. Id: {_rssFeed.Id}");
@@ -74,7 +79,12 @@ namespace Outloud.Rss
         {
             int downloadedNews = 0;
 
-            if (_rssFeed.Uri == default)
+            if (_rssFeed == default)
+            {
+                _logger?.LogError($"Rss feed is empty");
+                throw new ArgumentException($"Rss feed is empty");
+            }
+            else if (_rssFeed.Uri == default)
             {
                 _logger?.LogError($"Url is empty. Id: {_rssFeed.Id}");
                 throw new ArgumentException($"Url is empty. Id: {_rssFeed.Id}");
